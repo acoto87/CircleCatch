@@ -13,9 +13,11 @@ public class GameController : MonoBehaviour
     public GameObject phantomLinePrefab;
     public GameObject line;
     public GameObject littleCirclePrefab;
+    public GameObject littleCircleExplosion;
     public Transform littleCirclesContainer;
     public TextMeshProUGUI scoreText;
     public TextMeshProUGUI maxScoreText;
+    public Shaker shaker;
 
     // public Sprite emptyHeart;
     // public Sprite fullHeart;
@@ -29,6 +31,7 @@ public class GameController : MonoBehaviour
     private float _speed;
     private LittleCircleController _littleCircle;
     private GameObject _phantomLine;
+    private int _littleCircleCount;
 
     void Awake()
     {
@@ -42,6 +45,7 @@ public class GameController : MonoBehaviour
         ScoreManager.Reset();
 
         _speed = minSpeed;
+        _littleCircleCount = 0;
 
         // lives = maxLives;
         // for (int i = 0; i < lives; i++)
@@ -66,44 +70,42 @@ public class GameController : MonoBehaviour
         }
 
         var clickDown = Input.GetMouseButtonDown(0);
-        if (_littleCircle != null && clickDown)
+        if (_littleCircle != null)
         {
-            if (_littleCircle.inside)
+            if (clickDown)
             {
-                ScoreManager.score++;
-                scoreText.text = ScoreManager.score.ToString();
+                if (_littleCircle.inside)
+                {
+                    ScoreManager.score += _littleCircle.isCountCircle ? _littleCircle.count : 1;
+                    scoreText.text = ScoreManager.score.ToString();
 
-                // PlaySound(1);
+                    // PlaySound(1);
 
-                var littleCirclePos = _littleCircle.transform.position;
-                GameObject.Destroy(_littleCircle.gameObject);
+                    NextLittleCircle(_littleCircle.transform.position);
 
-                NextLittleCircle(littleCirclePos);
+                    StartCoroutine(shaker.Shake(0.2f, 0.1f));
 
-                direction *= -1;
-                _speed += deltaSpeed;
-                _speed = Mathf.Clamp(_speed, minSpeed, maxSpeed);
-            }
-            else if (_littleCircle.exited || clickDown)
-            {
-                // littleCircle.exited = false;
-                // lives = Mathf.Clamp(lives - 1, 0, maxLives);
+                    direction *= -1;
 
-                // PlaySound(2);
-            }
+                    _speed += deltaSpeed;
+                    _speed = Mathf.Clamp(_speed, minSpeed, maxSpeed);
+                }
+                else
+                {
+                    // lives = Mathf.Clamp(lives - 1, 0, maxLives);
 
-            if (_phantomLine != null)
-            {
-                _phantomLine.CancelAllTweens();
-                GameObject.Destroy(_phantomLine);
-                _phantomLine = null;
+                    // PlaySound(2);
+                }
+
+                NextPhantomLine();
             }
 
-            _phantomLine = GameObject.Instantiate(phantomLinePrefab, line.transform.position, line.transform.rotation, phantomLinesContainer);
-            _phantomLine.GetComponent<Image>().FadeOut(1.0f).SetOnComplete(() => {
-                GameObject.Destroy(_phantomLine);
-                _phantomLine = null;
-            }).SetOwner(_phantomLine);
+            if (_littleCircle.isCountCircle && !_littleCircle.counting)
+            {
+                NextLittleCircle(_littleCircle.transform.position);
+
+                StartCoroutine(shaker.Shake(0.2f, 0.1f));
+            }
         }
 
         // for (int i = 0; i < lives; i++)
@@ -124,9 +126,15 @@ public class GameController : MonoBehaviour
 
     private void NextLittleCircle(Vector2 position)
     {
-        position.Normalize();
-        var pointInCircle = Random.insideUnitCircle.normalized;
+        if (_littleCircle != null)
+        {
+            GameObject.Instantiate(littleCircleExplosion, _littleCircle.transform.position, Quaternion.identity, littleCirclesContainer);
+            GameObject.DestroyImmediate(_littleCircle.gameObject);
+        }
 
+        position.Normalize();
+
+        var pointInCircle = Random.insideUnitCircle.normalized;
         while (Vector2.Angle(position, pointInCircle) < separationAngle)
         {
             pointInCircle = Random.insideUnitCircle.normalized;
@@ -134,6 +142,29 @@ public class GameController : MonoBehaviour
 
         var littleCircleObj = GameObject.Instantiate(littleCirclePrefab, pointInCircle * 2.35f, Quaternion.identity, littleCirclesContainer);
         _littleCircle = littleCircleObj.GetComponent<LittleCircleController>();
+
+        if (Random.Range(0, 100) < Mathf.Min(_littleCircleCount, 70))
+        {
+            _littleCircle.SetAsCountingCircle();
+        }
+
+        _littleCircleCount++;
+    }
+
+    private void NextPhantomLine()
+    {
+        if (_phantomLine != null)
+        {
+            _phantomLine.CancelAllTweens();
+            GameObject.Destroy(_phantomLine);
+            _phantomLine = null;
+        }
+
+        _phantomLine = GameObject.Instantiate(phantomLinePrefab, line.transform.position, line.transform.rotation, phantomLinesContainer);
+        _phantomLine.GetComponent<Image>().FadeOut(1.0f).SetOnComplete(() => {
+            GameObject.Destroy(_phantomLine);
+            _phantomLine = null;
+        }).SetOwner(_phantomLine);
     }
 
     // private void PlaySound(int index)
